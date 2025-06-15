@@ -1,0 +1,9 @@
+/node_modules
+.env
+database*
+test*
+request.json
+yarn.lock
+data*
+proxy*
+balance*

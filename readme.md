@@ -1,0 +1,3 @@
+- Campnetwork
+  - data.txt (private key)
+  - proxy.txt (ip:port:user:pass)
