@@ -10,6 +10,7 @@ import { Evm } from "./helper/evm_wallet.js";
 import { Web3 } from "web3";
 import axiosRetry from "axios-retry";
 import readline from "readline";
+import { formatEther, parseEther } from "ethers";
 const rl = readline.createInterface({
   input: process.stdin,
   output: process.stdout,
@@ -41,6 +42,55 @@ const abi_balance = [
     type: "function",
   },
 ];
+const abi_placeBet = [
+  {
+    inputs: [
+      {
+        internalType: "bytes32",
+        name: "matchId",
+        type: "bytes32",
+      },
+      {
+        internalType: "uint256",
+        name: "outcome",
+        type: "uint256",
+      },
+      {
+        internalType: "uint256",
+        name: "amount",
+        type: "uint256",
+      },
+    ],
+    name: "placeBet",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+];
+const abi_approve = [
+  {
+    constant: false,
+    inputs: [
+      {
+        name: "spender",
+        type: "address",
+      },
+      {
+        name: "amount",
+        type: "uint256",
+      },
+    ],
+    name: "approve",
+    outputs: [
+      {
+        name: "success",
+        type: "bool",
+      },
+    ],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+];
 const contract_info = [
   {
     CA: "0xa0D4687483F049c53e6EC8cBCbc0332C74180168",
@@ -64,8 +114,9 @@ const contract_info = [
   },
 ];
 //#endregion
+
 class Account {
-  constructor(index, privateKey, proxy, input_program) {
+  constructor(index, privateKey, proxy, input_program, config) {
     this.index = index;
     this.privateKey = privateKey;
     let [ip, port, user, password] = proxy.split(":");
@@ -75,9 +126,31 @@ class Account {
     this.headers = {
       "User-Agent":
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.212 Safari/537.36",
-      "Accept-Language": "vi-VN,vi",
+      "Accept-Language": "en-US,en;q=0.9,en-GB;q=0.8,en-CA;q=0.7",
+      "content-type": "application/json",
+      origin: "https://app.scoreplay.xyz",
+      accept: "application/json, text/plain, */*",
+      "next-action": "4089e291e228855bf495ec5c1673fa67c90bce5e9c",
+      baggage:
+        "sentry-environment=production,sentry-release=Kj--WrVGa71sXvL0AVLA4,sentry-public_key=4ad3a1e570e1129ac7e24d2e4bdae7d9,sentry-trace_id=d4de8adbca3f4e676ba696ea2c7c151b,sentry-sample_rate=1,sentry-transaction=GET%20%2Fprofile,sentry-sampled=true",
     };
     this.input_program = input_program;
+    this.headers2 = {
+      "User-Agent":
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36",
+      "Accept-Language": "en-US,en;q=0.9,en-GB;q=0.8,en-CA;q=0.7",
+      "content-type": "application/json",
+      referer: "https://storychain.ai/",
+      origin: "https://storychain.ai",
+      accept: "application/json, text/plain, */*",
+      priority: "u=1, i",
+      "sec-ch-ua-mobile": "?0",
+      "sec-ch-ua-platform": "Windows",
+      "sec-fetch-dest": "empty",
+      "sec-fetch-mode": "cors",
+      "sec-fetch-site": "same-site",
+    };
+    this.config = config;
   }
 
   log(message, level = "info") {
@@ -114,7 +187,7 @@ class Account {
 
       const options = {
         headers: header ? { ...this.headers, header } : this.headers,
-        timeout: 10000,
+        timeout: 40000,
         httpsAgent: agent,
       };
       const axiosInstance = axios.create();
@@ -175,7 +248,32 @@ class Account {
       return "Unknown IP";
     }
   }
-
+  //#region ScorePlay
+  async placebet(matchId, outcome, amount) {
+    try {
+      let tx = await this.web3.callContract(
+        "0x19e80fBf3a9ec8Cc7B259786F183E7feC4F01287",
+        abi_approve,
+        "approve",
+        ["0xb3904077B0437B024a0b5023926e7BE438cf7684", parseEther("10")],
+        BigInt(0)
+      );
+      if (tx) {
+        this.log(`Approve hash:${tx}`, "success");
+        const txPlace = await this.web3.callContract(
+          "0xb3904077B0437B024a0b5023926e7BE438cf7684",
+          abi_placeBet,
+          "placeBet",
+          [matchId, outcome, parseEther(`${amount}`)],
+          BigInt(0)
+        );
+        this.log(`placeBet tx ${txPlace}`, "success");
+      }
+    } catch (error) {
+      this.log(`${error.message}`, "error");
+    }
+  }
+  //#endregion
   async processAccount() {
     try {
       switch (this.input_program) {
@@ -186,6 +284,22 @@ class Account {
           break;
         case 2:
           await this.doTaskTokenTail();
+          break;
+        case 3:
+          const balancetScore = await this.checkToken(
+            "0x19e80fBf3a9ec8Cc7B259786F183E7feC4F01287"
+          );
+          const format = formatEther(`${balancetScore}`);
+          this.log(`Wallet ${this.web3.address} balance ${format}`, "success");
+          const matchId = process.env.MATCHID;
+          const outcome = process.env.OUTCOME;
+          const amount = process.env.AMOUNT;
+          if (parseFloat(format) > amount) {
+            await this.placebet(matchId, outcome, amount);
+          } else {
+            this.log(`insuficiant tScore`, "warning");
+          }
+          await this.sleep(5000);
           break;
         default:
           this.log("Chức năng không xác định, Vui lòng nhập lại", "warning");
@@ -202,6 +316,7 @@ async function getAccountIndexInput() {
       "----Campnetwork by Chungmaster Tele: @chungmaster23 ---- \n" +
         "Nhập 1: Check Balance \n" +
         "Nhập 2: Mint NFT Token Tail \n" +
+        "Nhập 3: ScorePlay \n" +
         "   Vui lòng nhập chức năng bạn muốn chọn:",
       (input) => {
         // Kiểm tra nếu người dùng nhập đúng định dạng
@@ -239,7 +354,7 @@ async function main() {
   const accounts = data.map((line, index) => {
     const proxy = proxys[index];
     const privateKey = line;
-    return new Account(index, privateKey, proxy, input_program);
+    return new Account(index, privateKey, proxy, input_program, config);
   });
 
   while (true) {

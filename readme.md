@@ -1,3 +1,4 @@
 - Campnetwork
+  - Đổi tên .exam.env thành .env
   - data.txt (private key)
   - proxy.txt (ip:port:user:pass)

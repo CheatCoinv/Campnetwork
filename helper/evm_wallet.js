@@ -75,4 +75,16 @@ export class Evm {
       return false;
     }
   }
+  async sign_message(message) {
+    try {
+      const signature = await this.web3.eth.accounts.sign(
+        message,
+        this.private_key
+      );
+      return signature;
+    } catch (error) {
+      console.error(error.message);
+      return false;
+    }
+  }
 }
