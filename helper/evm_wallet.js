@@ -1,7 +1,8 @@
 import Web3 from "web3";
 import Web3HttpProvider from "web3-providers-http";
 import { HttpsProxyAgent } from "https-proxy-agent";
-const RPC = "https://rpc.basecamp.t.raas.gelato.cloud";
+import { parseEther } from "ethers";
+const RPC = "https://rpc.basecamp.t.raas.gelato.cloud"; //"https://rpc.basecamp.t.raas.gelato.cloud";
 
 export class Evm {
   constructor(private_key, proxy_url) {
@@ -18,9 +19,9 @@ export class Evm {
     this.address =
       this.web3.eth.accounts.privateKeyToAccount(private_key).address;
   }
-  async getBalance() {
+  async getBalance(address) {
     try {
-      const balance = await this.web3.eth.getBalance(this.address);
+      const balance = await this.web3.eth.getBalance(address);
       return this.web3.utils.fromWei(balance, "ether");
     } catch (error) {
       console.error(error);
@@ -40,18 +41,23 @@ export class Evm {
   async callContract(contractAddress, abi, method, params, fee) {
     try {
       const contract = new this.web3.eth.Contract(abi, contractAddress);
-      const nonce = await this.web3.eth.getTransactionCount(
-        this.address,
-        "pending"
-      );
-
       const data = contract.methods[method](...params).encodeABI();
-      const gasEstimate = await this.web3.eth.estimateGas({
-        from: this.address,
-        to: contractAddress,
-        data: data,
-        value: this.web3.utils.toWei(fee, "ether"),
-      });
+      let gasEstimate = 300000;
+      try {
+        gasEstimate = await this.web3.eth.estimateGas({
+          from: this.address,
+          to: contractAddress,
+          data: data,
+          value: this.web3.utils.toWei(fee, "ether"),
+        });
+      } catch (error) {
+        if (error?.cause?.data == "0x646cf558") {
+          console.log(`Trận ko hợp lệ`);
+        } else {
+          console.log(`Lỗi ${error?.cause?.data}`);
+        }
+      }
+
       const gasPrice = await this.web3.eth.getGasPrice();
       const tx = {
         from: this.address,
@@ -60,7 +66,6 @@ export class Evm {
         gasPrice: gasPrice,
         data: data,
         value: this.web3.utils.toWei(fee, "ether"),
-        nonce: nonce,
       };
       const signedTx = await this.web3.eth.accounts.signTransaction(
         tx,

@@ -1,4 +1,4 @@
 {
   "maxThreads": 1,
-  "waitMinutes": 1
+  "waitMinutes": 100
 }
