@@ -10,7 +10,9 @@ import { Evm } from "./helper/evm_wallet.js";
 import { Web3 } from "web3";
 import axiosRetry from "axios-retry";
 import readline from "readline";
-import { formatEther, parseEther } from "ethers";
+import { formatEther, parseEther, Wallet } from "ethers";
+import FormData from "form-data";
+import { message } from "telegram/client/index.js";
 const rl = readline.createInterface({
   input: process.stdin,
   output: process.stdout,
@@ -153,6 +155,246 @@ const abi_mint_raible = [
     outputs: [],
   },
 ];
+const abi_mint = [
+  {
+    inputs: [],
+    name: "claim",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+];
+
+const abi_hasClaim = [
+  {
+    inputs: [
+      {
+        internalType: "address",
+        name: "user",
+        type: "address",
+      },
+    ],
+    name: "hasClaimed",
+    outputs: [
+      {
+        internalType: "bool",
+        name: "",
+        type: "bool",
+      },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+];
+
+const abi_createPost = [
+  {
+    inputs: [
+      {
+        internalType: "string",
+        name: "contentHash",
+        type: "string",
+      },
+    ],
+    name: "createPost",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+];
+const abi_sendmail = [
+  {
+    inputs: [
+      {
+        internalType: "string",
+        name: "to",
+        type: "string",
+      },
+      {
+        internalType: "string",
+        name: "path",
+        type: "string",
+      },
+    ],
+    name: "send_mail",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+];
+const abi_register_olympics = [
+  {
+    type: "function",
+    name: "registerUser",
+    stateMutability: "nonpayable",
+    inputs: [
+      {
+        name: "_inviteCode",
+        type: "uint48",
+      },
+    ],
+    outputs: [],
+  },
+];
+
+const abi_estimateTokensForEth = [
+  {
+    type: "function",
+    name: "estimateTokensForEth",
+    stateMutability: "view",
+    inputs: [
+      { name: "_tokenAddr", type: "address" },
+      { name: "_ethAmount", type: "uint256" },
+    ],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+];
+const abi_buyTeamWithEth = [
+  {
+    type: "function",
+    inputs: [
+      {
+        name: "_tokenAddress",
+        type: "address",
+      },
+      {
+        name: "_minNumTokens",
+        type: "uint256",
+      },
+    ],
+    name: "buyTeamWithEth",
+    constant: false,
+    outputs: [],
+    stateMutability: "payable",
+    payable: true,
+  },
+];
+const abi_tokensPriceByAddress = [
+  {
+    type: "function",
+    inputs: [
+      {
+        name: "_tokenAddr",
+        type: "address",
+      },
+      {
+        name: "_numTokens",
+        type: "uint256",
+      },
+      {
+        name: "_buy",
+        type: "bool",
+      },
+    ],
+    name: "tokensPriceByAddress",
+    constant: true,
+    outputs: [
+      {
+        name: "price",
+        type: "uint256",
+        baseType: "uint256",
+      },
+      {
+        name: "fees",
+        type: "uint256",
+      },
+    ],
+    stateMutability: "view",
+    payable: false,
+    gas: null,
+  },
+];
+const abi_sellTeam = [
+  {
+    type: "function",
+    inputs: [
+      {
+        name: "_tokenAddress",
+        type: "address",
+      },
+      {
+        name: "_numTokens",
+        type: "uint256",
+      },
+      {
+        name: "_minAmountOut",
+        type: "uint256",
+      },
+    ],
+    name: "sellTeam",
+    constant: false,
+    outputs: [],
+    stateMutability: "nonpayable",
+    payable: false,
+  },
+];
+const abi_mint_conf = [
+  {
+    inputs: [
+      {
+        internalType: "uint256",
+        name: "points",
+        type: "uint256",
+      },
+      {
+        internalType: "bytes",
+        name: "signature",
+        type: "bytes",
+      },
+      {
+        internalType: "string",
+        name: "tokenUri",
+        type: "string",
+      },
+    ],
+    name: "mint",
+    outputs: [],
+    stateMutability: "payable",
+    type: "function",
+  },
+];
+const abi_mint_noparam = [
+  {
+    inputs: [],
+    name: "mint",
+    outputs: [],
+    stateMutability: "payable",
+    type: "function",
+  },
+];
+const abi_mintNFT_Photo = [
+  {
+    inputs: [],
+    name: "mintNFT",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+];
+const abi_mintSBT = [
+  {
+    type: "function",
+    name: "mintSBT",
+    inputs: [
+      {
+        name: "taskName",
+        type: "string",
+      },
+      {
+        name: "questType",
+        type: "uint8",
+      },
+      {
+        name: "tokenURI",
+        type: "string",
+      },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+];
+
+//#endregion
 
 //#region Raible
 const contract_NFT_raible = process.env.NFT_RARIBLE_CONTRACT;
@@ -165,9 +407,15 @@ let matchID_claim = process.env.MATCHID_CLAIM;
 let outcome = parseInt(process.env.OUTCOME);
 let amount = parseInt(process.env.AMOUNT);
 //#endregion
+
 //#region PANENKA_FC
 let room_id = process.env.ROOM_ID;
 let formation = process.env.FORMATION;
+//#endregion
+
+//#region Olympics
+let INVITE_CODE = process.env.INVITE_CODE;
+const contract_Olympic = "0xf4c11241abFe3734927083Cd4BF7A33d4e97dF9a";
 //#endregion
 
 class Account {
@@ -207,6 +455,16 @@ class Account {
     this.email = email;
     this.config = config;
     this.team = team;
+    this.header_olympics = {
+      "User-Agent":
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.212 Safari/537.36",
+      "Accept-Language": "vi-VN,vi;q=0.9",
+      "content-type": "application/json",
+      origin: "https://camp.olympics.fun",
+      referer: "https://camp.olympics.fun/",
+      accept: "application/json, text/plain, */*",
+    };
+    this.wallet = new Wallet(this.privateKey);
   }
 
   log(message, level = "info") {
@@ -298,6 +556,15 @@ class Account {
     );
     return parseInt(balance_of_tokenInput.toString());
   }
+  async checkToken2(contract_token_input) {
+    let balance_of_tokenInput = await this.web3.callReadOnlyContract(
+      contract_token_input,
+      abi_balance,
+      "balanceOf",
+      [this.address]
+    );
+    return balance_of_tokenInput;
+  }
   async checkIP() {
     try {
       const response = await this.http("https://api.ipify.org?format=json");
@@ -306,6 +573,7 @@ class Account {
       return "Unknown IP";
     }
   }
+
   //#region TokenTail
   async doTaskTokenTail() {
     for await (let i of contract_info) {
@@ -314,14 +582,24 @@ class Account {
       if (amount > 0) {
         this.log(`Đã có NFT`, "success");
       } else {
-        const tx = await this.web3.callContract(
-          i.CA,
-          abi_safeMint,
-          "safeMint",
-          [this.web3.address],
-          BigInt(0)
-        );
-        this.log(`Mint txHash: ${tx}`, "success");
+        try {
+          let try_count = 0;
+          while (try_count < 5) {
+            const tx = await this.web3.callContract(
+              i.CA,
+              abi_safeMint,
+              "safeMint",
+              [this.web3.address],
+              BigInt(0)
+            );
+            if (tx) {
+              this.log(`Mint txHash: ${tx}`, "success");
+              break;
+            } else {
+              try_count++;
+            }
+          }
+        } catch (error) {}
       }
     }
   }
@@ -332,10 +610,10 @@ class Account {
     let try_count = 0;
     try {
       let tx = await this.web3.callContract(
-        "0x19e80fBf3a9ec8Cc7B259786F183E7feC4F01287",
+        "0xa79d22eb8929cc820f1bcceb08b2c35929cd6099",
         abi_approve,
         "approve",
-        ["0xb3904077B0437B024a0b5023926e7BE438cf7684", parseEther(`${amount}`)],
+        ["0x51D9a5b6574Ca164AD40D8B47847cDbFCF591766", parseEther(`${amount}`)],
         BigInt(0)
       );
       if (tx) {
@@ -343,7 +621,7 @@ class Account {
         await this.sleep(1000);
         while (try_count < 5) {
           const txPlace = await this.web3.callContract(
-            "0xb3904077B0437B024a0b5023926e7BE438cf7684",
+            "0x51D9a5b6574Ca164AD40D8B47847cDbFCF591766",
             abi_placeBet,
             "placeBet",
             [matchId_bet, outcome, parseEther(`${amount}`)],
@@ -369,7 +647,7 @@ class Account {
     try {
       this.log(`Claim match ID ${matchID_claim}`, "warning");
       const txPlace = await this.web3.callContract(
-        "0xb3904077B0437B024a0b5023926e7BE438cf7684",
+        "0x51D9a5b6574Ca164AD40D8B47847cDbFCF591766",
         abi_claimPayout,
         "claimPayout",
         [matchID_claim],
@@ -386,7 +664,7 @@ class Account {
 
   //#region Panenka FC
 
-  tryBuildRandomTeam(players, costLimit = 100, maxAttempts = 1000) {
+  tryBuildRandomTeam(players, costLimit = 90, maxAttempts = 1000) {
     const parseCostSafe = (cost) => {
       const parsed = parseFloat(cost);
       return isNaN(parsed) ? 0 : parsed;
@@ -595,29 +873,18 @@ class Account {
         formationId: formation,
       };
       let try_count = 0;
-      while (try_count < 5) {
-        try {
-          const response = await this.http(
-            `https://prod-api.panenkafc.gg/api/v1/teams`,
-            null,
-            payload
-          );
-          if (response.status == 200 || response.status == 201) {
-            const team_id = response.data?.data?.id;
-            await this.JoinTeam(team_id);
-            break;
-          } else {
-            try_count++;
-          }
-        } catch (error) {
-          if (error.response) {
-            this.log(`${JSON.stringify(error.response.data)}`, "error");
-            this.log(`Try index ${try_count} after 60s`, "error");
-          }
-          try_count++;
+      try {
+        const response = await this.http(
+          `https://prod-api.panenkafc.gg/api/v1/teams`,
+          null,
+          payload
+        );
+        if (response.status == 200 || response.status == 201) {
+          const team_id = response.data?.data?.id;
+          await this.JoinTeam(team_id);
+        } else {
         }
-        await this.sleep(60000);
-      }
+      } catch (errr) {}
     } catch (error) {
       if (error.response) {
         console.log(error.response.data);
@@ -787,6 +1054,7 @@ class Account {
           await this.checkSpin();
           await this.sleep(3000);
           await this.checkTicket();
+          // await this.createStoryP("Whispy rain");
           return true;
         }
       }
@@ -858,7 +1126,7 @@ class Account {
         if (response.data.ticketStory > 0) {
           const characte_id = await this.getCharacter();
           this.log(`Creating story with character ${characte_id}`, "warning");
-          await this.createStory(characte_id, "cow and buffalo");
+          await this.createStory(characte_id, "sky and rain");
         } else {
           this.log(`Skip create story today`, "warning");
         }
@@ -955,6 +1223,590 @@ class Account {
       return false;
     }
   }
+  async createStoryP(prompt) {
+    try {
+      const response = await axios.post(
+        `https://api.storychain.ai/p/camp-stories/create`,
+        {
+          prompt: prompt,
+          isfr5: "true",
+          jn19: "true",
+        },
+        {
+          headers: this.headers2,
+          httpAgent: this.proxy ? new HttpsProxyAgent(`${this.proxy}`) : null,
+          httpsAgent: this.proxy ? new HttpsProxyAgent(`${this.proxy}`) : null,
+          timeout: 80000,
+        }
+      );
+      if (response.status == 200) {
+        this.log(
+          `Story Id ${JSON.stringify(response.data?.storyId)}`,
+          "success"
+        );
+        this.log(
+          `Story title ${JSON.stringify(response.data?.message)}`,
+          "success"
+        );
+      }
+    } catch (error) {
+      if (error.response) {
+        this.log(
+          `Catch createStoryP  ${JSON.stringify(error.response.data)}`,
+          "error"
+        );
+      } else {
+        console.log(error.message);
+      }
+      return false;
+    }
+  }
+  //#endregion
+  //#region Sphere
+  async getNonceSphere() {
+    try {
+      const response = await axios.post(
+        `https://wv2h4to5qa.execute-api.us-east-2.amazonaws.com/dev/auth/client-user/nonce`,
+        {
+          walletAddress: this.address,
+        },
+        {
+          headers: {
+            "x-client-id": "6a886b9d-e637-49ab-8c06-a66a20b7a778",
+            "user-agent":
+              "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36",
+            "content-type": "application/json",
+          },
+          httpAgent: this.proxy ? new HttpsProxyAgent(`${this.proxy}`) : null,
+          httpsAgent: this.proxy ? new HttpsProxyAgent(`${this.proxy}`) : null,
+          timeout: 80000,
+        }
+      );
+      if (response.status == 200) {
+        const nonce = response.data?.data;
+
+        let message = `mysphere.fun wants you to sign in with your Ethereum account:
+${this.address}
+
+Connect with Camp Network
+
+URI: https://mysphere.fun
+Version: 1
+Chain ID: 123420001114
+Nonce: ${nonce}
+Issued At: ${new Date().toISOString()}`;
+        const sign = await this.web3.sign_message(message);
+
+        const payload = {
+          message: message,
+          signature: sign.signature,
+          walletAddress: this.address,
+        };
+        return payload;
+      }
+    } catch (error) {
+      console.log(error.response.data);
+    }
+  }
+  async LoginSphere() {
+    try {
+      const payload = await this.getNonceSphere();
+      const response = await axios.post(
+        `https://wv2h4to5qa.execute-api.us-east-2.amazonaws.com/dev/auth/client-user/verify`,
+        payload,
+        {
+          headers: {
+            "x-client-id": "6a886b9d-e637-49ab-8c06-a66a20b7a778",
+            "user-agent":
+              "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36",
+            "content-type": "application/json",
+          },
+          httpAgent: this.proxy ? new HttpsProxyAgent(`${this.proxy}`) : null,
+          httpsAgent: this.proxy ? new HttpsProxyAgent(`${this.proxy}`) : null,
+          timeout: 80000,
+        }
+      );
+      if (response.status == 200) {
+        return response.data?.data;
+      }
+    } catch (error) {
+      console.log(error.response.data);
+      return false;
+    }
+  }
+  async getAuth() {
+    try {
+      const jwtToken = await this.LoginSphere();
+      if (jwtToken) {
+        const response = await axios.get(
+          `https://wv2h4to5qa.execute-api.us-east-2.amazonaws.com/dev/auth/origin/usage`,
+          {
+            headers: {
+              "x-client-id": "6a886b9d-e637-49ab-8c06-a66a20b7a778",
+              Authorization: `Bearer ${jwtToken}`,
+              "user-agent":
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36",
+              "content-type": "application/json",
+            },
+            httpAgent: this.proxy ? new HttpsProxyAgent(`${this.proxy}`) : null,
+            httpsAgent: this.proxy
+              ? new HttpsProxyAgent(`${this.proxy}`)
+              : null,
+            timeout: 80000,
+          }
+        );
+        if (response.data == 200) {
+          this.log(`${JSON.stringify(response.data.data)}`, "success");
+        }
+      }
+    } catch (error) {
+      console.log(error.response.data);
+    }
+  }
+  async mintNFT_Sphere() {
+    try {
+      const isClaim = await this.web3.callReadOnlyContract(
+        "0x1eD74B27f846C699A90926daD057A7f6FD22C126",
+        abi_hasClaim,
+        "hasClaimed",
+        [this.address]
+      );
+      if (!isClaim) {
+        const tx = await this.web3.callContract(
+          "0x1eD74B27f846C699A90926daD057A7f6FD22C126",
+          abi_mint,
+          "claim",
+          [],
+          "0"
+        );
+        if (tx) {
+          this.log(`Mint tx ${tx}`, "success");
+        }
+      } else {
+        this.log(`Wallet had claim NFT PORTAL`, "warning");
+      }
+    } catch (error) {
+      console.log(error);
+    }
+  }
+  async cratePost() {
+    try {
+      let content = this.getRandomString(10);
+      const tx = await this.web3.callContract(
+        "0x177Af844a3c7A1749dE97656a5d84b6373Fc350E",
+        abi_createPost,
+        "createPost",
+        [content],
+        "0"
+      );
+      if (tx) {
+        this.log(`createPost tx: ${tx}`, "success");
+      }
+    } catch (error) {
+      this.log(`Catch createPost ${error}`, "error");
+    }
+  }
+  //#endregion
+  //#region DMAIL
+  async send_Mail() {
+    try {
+      // const tx = await this.web3.callContract(
+      //   "0x47F3Ffd4d42b8e5AF17b5a327ae4782D2FF46867",
+      //   abi_sendmail,
+      //   "send_mail",
+      //   [],
+      //   "0"
+      // );
+    } catch (error) {}
+  }
+  //#endregion
+  //#region Olympic
+
+  async getNonce() {
+    try {
+      const payload = {
+        wallet_address: this.address,
+      };
+      const agent = this.proxy ? new HttpsProxyAgent(`${this.proxy}`) : null;
+      const response = await axios.post(
+        `https://camp-api.olympics.fun/api/v1/user/auth/login`,
+        payload,
+        {
+          headers: this.header_olympics,
+          httpAgent: agent,
+          httpsAgent: agent,
+        }
+      );
+      if (response.status == 200) {
+        return response.data?.message;
+      } else {
+        return false;
+      }
+    } catch (error) {
+      if (error.response) {
+        this.log(`Catch getNonce  ${error.response.data}`, "error");
+      }
+      return false;
+    }
+  }
+  async verify_signature() {
+    try {
+      const agent = this.proxy ? new HttpsProxyAgent(`${this.proxy}`) : null;
+      const message = await this.getNonce();
+      if (message) {
+        let signature = await this.web3.sign_message(message);
+        let payload = {
+          wallet_address: this.address,
+          message: message,
+          signature: signature.signature,
+        };
+        const response = await axios.post(
+          `https://camp-api.olympics.fun/api/v1/user/auth/verify-signature`,
+          payload,
+          {
+            headers: this.header_olympics,
+            httpAgent: agent,
+            httpsAgent: agent,
+          }
+        );
+        if (response.status == 200) {
+          this.header_olympics = {
+            ...this.header_olympics,
+            authorization: `Bearer ${response.data?.access}`,
+          };
+          this.log(`Login Game success`, "success");
+          return true;
+        } else {
+          return false;
+        }
+      }
+    } catch (error) {
+      if (error.response) {
+        this.log(`Catch verify_signature  ${error.response.data}`, "error");
+      }
+      return false;
+    }
+  }
+  async checkProfile() {
+    try {
+      if (await this.verify_signature()) {
+        const agent = this.proxy ? new HttpsProxyAgent(`${this.proxy}`) : null;
+        const response = await axios.post(
+          `https://camp-api.olympics.fun/api/v1/user/profile`,
+          {},
+          {
+            headers: this.header_olympics,
+            httpAgent: agent,
+            httpsAgent: agent,
+          }
+        );
+        if (response.data?.is_banned) {
+          this.log(`Account band`, "error");
+          return false;
+        } else {
+          if (!response.data?.invite_code) {
+            try {
+              this.log(`Register Invite_code ${INVITE_CODE}`, "success");
+              const tx = await this.web3.callContract(
+                contract_Olympic,
+                abi_register_olympics,
+                "registerUser",
+                [INVITE_CODE],
+                "0"
+              );
+              if (tx) {
+                this.log(`Register Invite_code ${tx}`, "success");
+              }
+            } catch (error) {
+              this.log(error, "error");
+            }
+          } else {
+            this.log(`Success - ${response.data?.invite_code}`, "success");
+          }
+          await this.sleep(1000);
+          if (!response.data?.username) {
+            try {
+              const update_rs = await axios.post(
+                `https://camp-api.olympics.fun/api/v1/user/profile/update-username`,
+                {
+                  username: this.getRandomString(10),
+                },
+                {
+                  headers: this.header_olympics,
+                  httpAgent: agent,
+                  httpsAgent: agent,
+                }
+              );
+              if (update_rs.status == 200) {
+                this.log(`Username Update ${update_rs.data}`, "success");
+              }
+            } catch (error) {
+              this.log(error, "error");
+            }
+          } else {
+            this.log(`Success - ${response.data?.username}`, "success");
+          }
+        }
+        await this.sleep(1000);
+        await this.buyToken();
+      }
+    } catch (error) {
+      if (error.response) {
+        this.log(`Catch LoginStory  ${error.response.data}`, "error");
+      }
+      return false;
+    }
+  }
+  async getAllToken() {
+    try {
+      const agent = this.proxy ? new HttpsProxyAgent(`${this.proxy}`) : null;
+      const response = await axios.get(
+        `https://camp-api.olympics.fun/api/v1/teams/all`,
+        {
+          headers: this.header_olympics,
+          httpAgent: agent,
+          httpsAgent: agent,
+        }
+      );
+
+      if (response.status == 200) {
+        let index = await this.random(0, response.data.length);
+        return response.data[index];
+      }
+    } catch (error) {
+      if (error.response) {
+        this.log(`Catch getAllToken  ${error.response.data}`, "error");
+      }
+      return false;
+    }
+  }
+  async buyToken() {
+    try {
+      const info_token = await this.getAllToken();
+      if (info_token) {
+        let balance = await this.web3.getBalance(this.address);
+        let fivePercent = (parseFloat(balance) * 0.05).toFixed(2);
+        let amount_buy = parseEther(`${fivePercent}`);
+        let amount_out = await this.web3.callReadOnlyContract(
+          contract_Olympic,
+          abi_estimateTokensForEth,
+          "estimateTokensForEth",
+          [info_token?.token_address, amount_buy]
+        );
+        const slippage = 3n; // 3%
+        const minTokens = (amount_out * (100n - slippage)) / 100n;
+        this.log(
+          `Buy ${fivePercent} eth reciver ${minTokens} token ${info_token?.symbol}`,
+          "success"
+        );
+        const tx = await this.web3.callContract(
+          contract_Olympic,
+          abi_buyTeamWithEth,
+          "buyTeamWithEth",
+          [info_token?.token_address, minTokens],
+          `${fivePercent}`
+        );
+        if (tx) {
+          this.log(`Buy success tx:${tx}`, "success");
+          await this.sleep(10000);
+          let balance_token = await this.checkToken2(info_token?.token_address);
+          this.log(`Wallet have ${balance_token} handle sell`, "success");
+          await this.sellToken(info_token?.token_address, balance_token);
+        }
+      }
+    } catch (error) {}
+  }
+  async sellToken(tokenSell, amount_sell) {
+    try {
+      const tx_approve = await this.web3.callContract(
+        tokenSell,
+        abi_approve,
+        "approve",
+        [contract_Olympic, amount_sell],
+        "0"
+      );
+      if (tx_approve) {
+        const tokensPriceByAddress_result =
+          await this.web3.callReadOnlyContract(
+            contract_Olympic,
+            abi_tokensPriceByAddress,
+            "tokensPriceByAddress",
+            [tokenSell, amount_sell, false]
+          );
+        const slippage = 3n; // 3%
+        const minTokens =
+          (tokensPriceByAddress_result.price * (100n - slippage)) / 100n;
+        this.log(`Sell ${amount_sell} reciver ${minTokens}`, "warning");
+        let try_count = 0;
+        while (try_count < 5) {
+          try {
+            const result_Sell = await this.web3.callContract(
+              contract_Olympic,
+              abi_sellTeam,
+              "sellTeam",
+              [tokenSell, amount_sell, minTokens],
+              "0"
+            );
+            if (result_Sell) {
+              this.log(`Sell success tx ${result_Sell}`, "success");
+              break;
+            } else {
+              try_count++;
+            }
+          } catch (error) {
+            try_count;
+          }
+        }
+      }
+    } catch (error) {}
+  }
+  //#endregion
+  //#region ConftApp
+  async getNonceConft() {
+    try {
+      const response = await axios.get(
+        `https://conft.app/connect?address=${this.address}`
+      );
+      if (response.status == 200) {
+        this.log(`Nonce ${response.data?.nonce?.nonce}`, "success");
+        const data = {
+          types: {
+            EIP712Domain: [],
+            Message: [
+              { name: "text", type: "string" },
+              { name: "nonce", type: "string" },
+            ],
+          },
+          primaryType: "Message",
+          domain: {
+            chainId: 123420001114,
+            verifyingContract: "0x0000000000000000000000000000000000000000",
+          },
+          message: {
+            text: "Welcome to coNFT! Please sign the message. This request does not trigger a transaction or cost any gas fees.",
+            nonce: response.data?.nonce?.nonce,
+          },
+        };
+        const signature = await this.wallet.signTypedData(
+          data.domain,
+          { [data.primaryType]: data.types[data.primaryType] },
+          data.message
+        );
+        return signature;
+      }
+    } catch (error) {
+      return false;
+    }
+  }
+  async LoginConf() {
+    try {
+      const sign = await this.getNonceConft();
+      const form = new FormData();
+
+      form.append("address", this.address);
+      form.append("signature", sign);
+      const response = await axios.post(
+        `https://conft.app/connect?_data=routes%2F_api.connect`,
+        null,
+        form
+      );
+      if (response.status == 200) {
+        this.log(`Login success`);
+      }
+    } catch (error) {
+      console.log(error.response);
+    }
+  }
+  async MintTrip_Planning_Badge() {
+    try {
+      const response = await axios.get(
+        `https://conft.app/get-badges/123420001114/0x7608000cbF0f4b369fc67AD89Cd42E021AF92020/${this.address}`
+      );
+      if (response.status == 200) {
+        const badge = response.data?.badge;
+        const sign = response.data?.signature;
+        this.log(`Badge ${JSON.stringify(badge)}`, "success");
+        this.log(`sign ${JSON.stringify(sign)}`, "success");
+        const jsonString = JSON.stringify(badge);
+        const base64 = Buffer.from(jsonString).toString("base64");
+        const dataUri = `data:application/json;base64,${base64}`;
+        const tx = await this.web3.callContract(
+          "0x7608000cbF0f4b369fc67AD89Cd42E021AF92020",
+          abi_mint_conf,
+          "mint",
+          [0, sign, dataUri],
+          "0.02"
+        );
+        if (tx) {
+          this.log(`Mint tx ${tx}`, "success");
+        }
+      }
+    } catch (error) {
+      console.log(error.message);
+    }
+  }
+  async MintNFTCampfire_Genesis() {
+    try {
+      const tx = await this.web3.callContract(
+        "0xFC79f0EaC5bEcf21fDcf037bAdb977b2b43DE497",
+        abi_mint_noparam,
+        "mint",
+        [],
+        "0.02"
+      );
+      if (tx) {
+        this.log(`Mint Campfire_Genesis tx ${tx}`, "success");
+      }
+    } catch (error) {
+      console.log(error.message);
+    }
+  }
+  //#endregion
+  //#region AWANA
+  async mintSBT() {
+    try {
+      const amountSBT = await this.checkToken(
+        "0x5f73aAb8977EAc008B0BADf34C62a9f9756C13CD"
+      );
+      if (amountSBT < 1) {
+        const tx = await this.web3.callContract(
+          "0x5f73aAb8977EAc008B0BADf34C62a9f9756C13CD",
+          abi_mintSBT,
+          "mintSBT",
+          [
+            "APP First Login",
+            0,
+            "https://tech.awana.world/apis/nft/sbtMeta/login",
+          ],
+          "0"
+        );
+        if (tx) {
+          this.log(`Mint SBT success ${tx}`, "success");
+        }
+      } else {
+        this.log(`Skip mint SBT`, "success");
+      }
+      const amountPhoto = await this.checkToken(
+        "0x37Cbfa07386dD09297575e6C699fe45611AC12FE"
+      );
+      if (amountPhoto < 1) {
+        const tx = await this.web3.callContract(
+          "0x37Cbfa07386dD09297575e6C699fe45611AC12FE",
+          abi_mintNFT_Photo,
+          "mintNFT",
+          [],
+          "0"
+        );
+        if (tx) {
+          this.log(`Mint Photo success ${tx}`, "success");
+        }
+      } else {
+        this.log(`Skip mint Photo`, "success");
+      }
+    } catch (error) {
+      console.log(error);
+    }
+  }
   //#endregion
   async processAccount() {
     try {
@@ -969,7 +1821,7 @@ class Account {
           break;
         case 3:
           const balancetScore = await this.checkToken(
-            "0x19e80fBf3a9ec8Cc7B259786F183E7feC4F01287"
+            "0xA79d22Eb8929Cc820F1bcCeb08B2c35929cd6099"
           );
           const format = formatEther(`${balancetScore}`);
           this.log(`Wallet ${this.web3.address} balance ${format}`, "success");
@@ -988,14 +1840,16 @@ class Account {
           await this.sleep(5000);
           break;
         case 5:
-          const amountNFT = await this.checkToken(contract_NFT_raible);
-          if (amountNFT < amount_mint) {
-            const amountNFT_mint = amount_mint - amountNFT;
-            await this.mintNFTRaible(amountNFT_mint);
-            await this.sleep(6000);
-          } else {
-            this.log(`Wallet have ${amountNFT} NFT`, "warning");
-          }
+          await this.mintNFTRaible(1);
+          await this.sleep(6000);
+          // const amountNFT = await this.checkToken(contract_NFT_raible);
+          // if (amountNFT < amount_mint) {
+          //   const amountNFT_mint = amount_mint - amountNFT;
+          //   await this.mintNFTRaible(amountNFT_mint);
+          //   await this.sleep(6000);
+          // } else {
+          //   this.log(`Wallet have ${amountNFT} NFT`, "warning");
+          // }
           break;
         case 6:
           await this.JoinGameRoom();
@@ -1004,6 +1858,33 @@ class Account {
         case 7:
           await this.handle_Login();
           await this.sleep(5000);
+          break;
+        case 8:
+          // await this.getAuth();
+          await this.mintNFT_Sphere();
+          await this.cratePost();
+          await this.sleep(5000);
+          break;
+        case 9:
+          break;
+        case 10:
+          await this.checkProfile();
+          await this.sleep(5000);
+          break;
+        case 11:
+          await this.LoginConf();
+          await this.MintTrip_Planning_Badge();
+          await this.sleep(5000);
+          await this.MintNFTCampfire_Genesis();
+          await this.sleep(5000);
+          break;
+        case 12:
+          await this.mintSBT();
+          await this.sleep(1000);
+          break;
+        case 13:
+          const amount_NFT = await this.checkToken(process.env.CONTRACT_TOKEN);
+          this.log(`Wallet: ${this.web3.address} --  ${amount_NFT} NFT`);
           break;
         default:
           this.log("Chức năng không xác định, Vui lòng nhập lại", "warning");
@@ -1019,13 +1900,19 @@ async function getAccountIndexInput() {
   return new Promise((resolve) => {
     rl.question(
       "----Campnetwork by Chungmaster Tele: @chungmaster23 ---- \n" +
-        "Nhập 1: Check Balance \n" +
+        "Nhập 13: Check TOKEN - Nhập CA ở .ENV \n" +
+        "Nhập 1: Check Balance CAMP \n" +
         "Nhập 2: Mint NFT Token Tail \n" +
-        "Nhập 3: ScorePlay \n" +
-        "Nhập 4: Claim Bet \n" +
+        "Nhập 3: ScorePlay - Daily \n" +
+        "Nhập 4: Claim Bet - Daily \n" +
         "Nhập 5: Mint NFT Raible \n" +
         "Nhập 6: Panenka FC \n" +
-        "Nhập 7: StoryChain AI \n" +
+        "Nhập 7: StoryChain AI - Daily \n" +
+        "Nhập 8: MySphere \n" +
+        "Nhập 9: DMail - Chưa xài đc \n" +
+        "Nhập 10: Olympics \n" +
+        "Nhập 11: ConftApp \n" +
+        "Nhập 12: AWANA and PictoGraph \n" +
         "   Vui lòng nhập chức năng bạn muốn chọn:",
       (input) => {
         // Kiểm tra nếu người dùng nhập đúng định dạng
@@ -1060,9 +1947,11 @@ async function getAccountIndexInputAccount() {
 
 async function fetchAllPlayers() {
   let allPlayers = [];
-  for (let page = 1; page <= 6; page++) {
+  const pages = process.env.PAGE;
+  let club = process.env.CLUB;
+  for (let page = 1; page <= pages; page++) {
     const res = await axios.get(
-      `https://prod-api.panenkafc.gg/api/v1/fpl/players?page=${page}&take=20&sortBy=cost&sortOrder=DESC&league=3412&&clubs=83ec9230-f232-4590-a084-9ffc7228a690&clubs=5f52f93d-4cb0-4591-8d9d-98d051fc7694&clubs=7fc57993-5173-45de-b63c-0f5b68622ae6&clubs=f2fe378a-0271-43df-9a2d-35b592b8dfe7`,
+      `https://prod-api.panenkafc.gg/api/v1/fpl/players?page=${page}&take=20&sortBy=cost&sortOrder=DESC&league=3412&&clubs=2e097333-c12a-48ac-8b6a-4a7f549521d9&clubs=78dc6631-08cc-4b6e-a165-bc681d5bedd6`,
       {
         headers: {
           "User-Agent":
@@ -1072,7 +1961,7 @@ async function fetchAllPlayers() {
           origin: "https://panenkafc.gg",
           accept: "application/json, text/plain, */*",
           authorization:
-            "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjE3NzcxNmNlLTM0NzItNDYxYi1hZGE2LTM0NGQwMzA4ODI2YyIsImVtYWlsIjoiYS5jLmNjc3QuZzc5cjQyN0BnbWFpbC5jb20iLCJ0eXBlIjoiYXV0aG9yaXphdGlvbiIsImlhdCI6MTc1MTE4Nzc2NiwiZXhwIjoxNzgyNzQ1MzY2LCJhdWQiOiJwYW5lbmthZmMuZ2ciLCJpc3MiOiJwYW5lbmthOmZjIiwic3ViIjoicGFuZW5rYTp1c2VyIn0.Yz0W4pY91eS6s0QBkEUWmNd2Kl-XUn-2H-G5nCxCSW4",
+            "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJlbWFpbCI6InRyYW5jaHVuZzJrQGdtYWlsLmNvbSIsImlkIjoiNDFiYTEwODktNDJhZi00ZWRjLThjNWMtOTQ4MzE2NzRjZWVjIiwidHlwZSI6ImF1dGhvcml6YXRpb24iLCJpYXQiOjE3NTEyMTA4NzEsImV4cCI6MTc4Mjc2ODQ3MSwiYXVkIjoicGFuZW5rYWZjLmdnIiwiaXNzIjoicGFuZW5rYTpmYyIsInN1YiI6InBhbmVua2E6dXNlciJ9.LmOdHrRZ2OpNCjiLtyXaeFVZZNU-qZrBFC9NtY_4nVU",
         },
       }
     );
