@@ -2,6 +2,7 @@ import Web3 from "web3";
 import Web3HttpProvider from "web3-providers-http";
 import { HttpsProxyAgent } from "https-proxy-agent";
 import { parseEther } from "ethers";
+
 const RPC = "https://rpc.basecamp.t.raas.gelato.cloud"; //"https://rpc.basecamp.t.raas.gelato.cloud";
 
 export class Evm {
